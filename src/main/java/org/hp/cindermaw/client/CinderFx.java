@@ -185,10 +185,10 @@ public final class CinderFx {
                 // 挥击：火焰沿挥击方向甩出
                 Vec3 hand = null;
                 double side = 0;
-                if (age >= 7 && age < 15) {
+                if (age >= 9 && age < 15) {
                     hand = handR;
                     side = 1;
-                } else if (age >= 20 && age < 28) {
+                } else if (age >= 22 && age < 28) {
                     hand = handL;
                     side = -1;
                 }
@@ -200,7 +200,17 @@ public final class CinderFx {
                     }
                 }
                 if (age == 11 || age == 24) {
-                    shake(boss.position(), 0.5F, 10);
+                    // 命中瞬间：拳前爆闪、贴地扬尘与碎石
+                    Vec3 hit = handR;
+                    if (age == 24) {
+                        hit = handL;
+                    }
+                    spawn(ModParticles.HEAT_FLASH.get(), hit, 2.6, 0, 0);
+                    debris(hit, 8, 0.3, random);
+                    for (int i = 0; i < 6; i++) {
+                        spawn(ModParticles.CINDER_SMOKE.get(), new Vec3(hit.x, boss.getY() + 0.2, hit.z).add(spread(random, 0.8), 0, spread(random, 0.8)), spread(random, 0.08), 0.03, spread(random, 0.08));
+                    }
+                    shake(boss.position(), 0.75F, 12);
                 }
             }
             case BREATH -> breathTick(boss, furnace, age, random);

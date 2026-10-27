@@ -1,0 +1,33 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "RFR",
+    "MBM",
+    "PLP"
+  ],
+  "key": {
+    "R": {
+      "item": "minecraft:blaze_rod"
+    },
+    "F": {
+      "item": "minecraft:fire_charge"
+    },
+    "M": {
+      "item": "minecraft:magma_block"
+    },
+    "B": {
+      "item": "minecraft:blast_furnace"
+    },
+    "P": {
+      "item": "minecraft:polished_blackstone_bricks"
+    },
+    "L": {
+      "item": "minecraft:lava_bucket"
+    }
+  },
+  "result": {
+    "item": "cindermaw:cindermaw_core",
+    "count": 1
+  }
+}

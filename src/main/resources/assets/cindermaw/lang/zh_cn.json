@@ -2,5 +2,13 @@
   "entity.cindermaw.cindermaw": "熔渊炉心",
   "item.cindermaw.cindermaw_spawn_egg": "熔渊炉心刷怪蛋",
   "entity.cindermaw.lava_bomb": "熔岩弹",
-  "entity.cindermaw.magma_effect": "熔岩震荡"
+  "entity.cindermaw.magma_effect": "熔岩震荡",
+  "item.cindermaw.cindermaw_core": "熔渊炉核",
+  "item.cindermaw.cindermaw_core.desc": "对地面使用，唤醒熔渊炉心",
+  "item.cindermaw.cindermaw_core.no_space": "空间不足，炉心无法苏醒",
+  "item.cindermaw.cindermaw_heart": "熔渊之心",
+  "item.cindermaw.cindermaw_hammer": "熔渊锤",
+  "item.cindermaw.cindermaw_hammer.desc": "按住右键蓄力，松开砸地掀起熔岩裂缝",
+  "item.cindermaw.cindermaw_chestplate": "炉心胸甲",
+  "itemGroup.cindermaw": "熔渊炉心"
 }

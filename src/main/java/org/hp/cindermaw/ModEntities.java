@@ -2,7 +2,9 @@ package org.hp.cindermaw;
 
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Rarity;
 import net.minecraftforge.common.ForgeSpawnEggItem;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -10,6 +12,9 @@ import net.minecraftforge.registries.RegistryObject;
 import org.hp.cindermaw.entity.CindermawEntity;
 import org.hp.cindermaw.entity.LavaBomb;
 import org.hp.cindermaw.entity.MagmaEffect;
+import org.hp.cindermaw.item.CindermawArmorMaterial;
+import org.hp.cindermaw.item.CindermawCoreItem;
+import org.hp.cindermaw.item.CindermawHammerItem;
 
 // 集中注册 Boss、熔岩弹、地面特效实体与刷怪蛋，公共注册类不引用客户端代码。
 public final class ModEntities {
@@ -39,6 +44,22 @@ public final class ModEntities {
     // 刷怪蛋颜色对应玄武岩主体与炉心橙焰。
     public static final RegistryObject<Item> CINDERMAW_SPAWN_EGG = ITEMS.register("cindermaw_spawn_egg",
             () -> new ForgeSpawnEggItem(CINDERMAW, 0x252933, 0xE65A1B, new Item.Properties()));
+
+    // 熔渊炉核：召唤 Boss 的消耗品，防火、史诗稀有度
+    public static final RegistryObject<Item> CINDERMAW_CORE = ITEMS.register("cindermaw_core",
+            () -> new CindermawCoreItem(new Item.Properties().stacksTo(16).rarity(Rarity.EPIC).fireResistant()));
+
+    // 熔渊之心：Boss 必掉的核心材料
+    public static final RegistryObject<Item> CINDERMAW_HEART = ITEMS.register("cindermaw_heart",
+            () -> new Item(new Item.Properties().rarity(Rarity.EPIC).fireResistant()));
+
+    // 熔渊锤：重型近战武器，蓄力砸地
+    public static final RegistryObject<Item> CINDERMAW_HAMMER = ITEMS.register("cindermaw_hammer",
+            () -> new CindermawHammerItem(new Item.Properties().rarity(Rarity.EPIC).fireResistant()));
+
+    // 炉心胸甲：下界合金胸甲锻造升级
+    public static final RegistryObject<Item> CINDERMAW_CHESTPLATE = ITEMS.register("cindermaw_chestplate",
+            () -> new ArmorItem(CindermawArmorMaterial.INSTANCE, ArmorItem.Type.CHESTPLATE, new Item.Properties().rarity(Rarity.EPIC).fireResistant()));
 
     private ModEntities() {
     }

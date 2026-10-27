@@ -43,8 +43,10 @@ public final class CindermawModel extends GeoModel<CindermawEntity> {
             return;
         }
         getBone("head").ifPresent(head -> {
-            head.setRotY(head.getRotY() + Mth.clamp(data.netHeadYaw(), -35.0F, 35.0F) * Mth.DEG_TO_RAD);
-            head.setRotX(head.getRotX() + Mth.clamp(data.headPitch(), -20.0F, 20.0F) * Mth.DEG_TO_RAD);
+            head.setRotY(head.getRotY() + Mth.clamp(data.netHeadYaw(), -45.0F, 45.0F) * Mth.DEG_TO_RAD);
+            head.setRotX(head.getRotX() + Mth.clamp(data.headPitch(), -25.0F, 25.0F) * Mth.DEG_TO_RAD);
+            // 转头时顺带歪头，显得更有生气
+            head.setRotZ(head.getRotZ() - Mth.clamp(data.netHeadYaw(), -45.0F, 45.0F) * 0.25F * Mth.DEG_TO_RAD);
         });
     }
 }

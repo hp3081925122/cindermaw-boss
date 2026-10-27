@@ -2,6 +2,8 @@ package org.hp.cindermaw.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -10,6 +12,7 @@ import net.minecraft.world.phys.Vec3;
 import org.hp.cindermaw.Cindermaw;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 // 网格特效绘制工具：叠加发光层画火焰与裂缝，半透明层画熔岩池与岩块。
 public final class VfxDraw {
@@ -18,6 +21,9 @@ public final class VfxDraw {
     public static final RenderType GLOW = RenderType.eyes(ATLAS);
     public static final RenderType SOFT = RenderType.entityTranslucentEmissive(ATLAS);
     public static final RenderType FLAME = RenderType.eyes(FLAME_SCROLL);
+    // 熔岩池两张可平铺贴图：流动熔浆与冷却裂缝
+    public static final RenderType MOLTEN = RenderType.eyes(ResourceLocation.fromNamespaceAndPath(Cindermaw.MOD_ID, "textures/effect/lava_molten.png"));
+    public static final RenderType CRUST = RenderType.eyes(ResourceLocation.fromNamespaceAndPath(Cindermaw.MOD_ID, "textures/effect/lava_crust.png"));
 
     // 图集分区（128×128 像素）
     public static final float[] CRACK = region(0, 0, 64, 8);
@@ -29,6 +35,10 @@ public final class VfxDraw {
     public static final float[] ROCK = region(64, 40, 80, 56);
     public static final float[] CORE = region(80, 40, 96, 56);
     public static final float[] DUST = region(0, 8, 32, 40);
+    // 喷焰火团两种变体
+    // 焦痕：白色径向透明度，染色后用作烧焦地面
+    public static final float[] SCORCH = region(0, 88, 32, 120);
+    public static final float[][] PUFF = {region(0, 56, 32, 88), region(32, 56, 64, 88)};
 
     private VfxDraw() {
     }
@@ -126,6 +136,34 @@ public final class VfxDraw {
             quad2(out, pose, top.subtract(s.scale(width1)), top.add(s.scale(width1)), base.add(s.scale(width0)), base.subtract(s.scale(width0)),
                     0, scroll, 1, scroll + repeat, rgb, alpha);
         }
+    }
+
+    // 朝向镜头的面片：可绕视线旋转，用于喷焰火团与闪光
+    public static void billboard(VertexConsumer out, PoseStack pose, Vec3 center, double size, double angle, float[] r, int rgb, float alpha) {
+        if (alpha <= 0.01F) {
+            return;
+        }
+        Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
+        Vector3f leftF = camera.getLeftVector();
+        Vector3f upF = camera.getUpVector();
+        Vec3 left = new Vec3(leftF.x(), leftF.y(), leftF.z());
+        Vec3 up = new Vec3(upF.x(), upF.y(), upF.z());
+        // 在镜头平面内旋转两条轴
+        double cos = Math.cos(angle) * size;
+        double sin = Math.sin(angle) * size;
+        Vec3 ax = left.scale(cos).add(up.scale(sin));
+        Vec3 ay = up.scale(cos).subtract(left.scale(sin));
+        quad(out, pose, center.add(ax).add(ay), center.subtract(ax).add(ay), center.subtract(ax).subtract(ay), center.add(ax).subtract(ay),
+                r[0], r[1], r[2], r[3], rgb, alpha);
+    }
+
+    // 两色线性插值
+    public static int mix(int a, int b, float t) {
+        float k = Math.max(0, Math.min(1, t));
+        int r = (int) (((a >> 16) & 255) + ((((b >> 16) & 255) - ((a >> 16) & 255)) * k));
+        int g = (int) (((a >> 8) & 255) + ((((b >> 8) & 255) - ((a >> 8) & 255)) * k));
+        int bl = (int) ((a & 255) + (((b & 255) - (a & 255)) * k));
+        return (r << 16) | (g << 8) | bl;
     }
 
     // 立方体：用于熔岩弹与碎岩

@@ -9,6 +9,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
@@ -112,7 +113,7 @@ public final class MagmaEffect extends Projectile {
     }
 
     // 生成效果实体并写入初始数据
-    private static MagmaEffect spawn(CindermawEntity owner, Vec3 at, CompoundTag d, int life) {
+    private static MagmaEffect spawn(LivingEntity owner, Vec3 at, CompoundTag d, int life) {
         MagmaEffect effect = ModEntities.MAGMA_EFFECT.get().create(owner.level());
         if (effect == null) {
             return null;
@@ -127,7 +128,7 @@ public final class MagmaEffect extends Projectile {
     }
 
     // 地面高度采样：从上往下找支撑面
-    private static int sampleGround(CindermawEntity owner, Vec3 point) {
+    private static int sampleGround(LivingEntity owner, Vec3 point) {
         var hit = owner.level().clip(new ClipContext(point.add(0, 2.5, 0), point.add(0, -4.0, 0), ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, owner));
         if (hit.getType() == HitResult.Type.MISS) {
             return NO_GROUND;
@@ -135,7 +136,7 @@ public final class MagmaEffect extends Projectile {
         return Math.round((float) (hit.getLocation().y - point.y) * 16.0F);
     }
 
-    public static void shockwave(CindermawEntity owner, Vec3 at, float radius, int style) {
+    public static void shockwave(LivingEntity owner, Vec3 at, float radius, int style) {
         CompoundTag d = new CompoundTag();
         d.putInt("Kind", SHOCKWAVE);
         d.putFloat("R", radius);
@@ -144,7 +145,13 @@ public final class MagmaEffect extends Projectile {
     }
 
     public static void fissure(CindermawEntity owner, Vec3 at, float yaw, int lines, float length) {
+        fissure(owner, at, yaw, lines, length, owner.attackDamage() * 0.55F);
+    }
+
+    // 通用裂缝：施放者可以是 Boss 或手持熔渊锤的玩家，每段伤害单独指定
+    public static void fissure(LivingEntity owner, Vec3 at, float yaw, int lines, float length, float damage) {
         CompoundTag d = new CompoundTag();
+        d.putFloat("Damage", damage);
         d.putInt("Kind", FISSURE);
         d.putFloat("Yaw", yaw);
         d.putInt("Lines", lines);
@@ -227,12 +234,19 @@ public final class MagmaEffect extends Projectile {
             discard();
             return;
         }
-        if (!(getOwner() instanceof CindermawEntity owner)) {
+        if (!(getOwner() instanceof LivingEntity caster)) {
+            return;
+        }
+        // 裂缝允许任意施放者，其余效果只属于 Boss
+        if (kind() == FISSURE) {
+            tickFissure(caster, age);
+            return;
+        }
+        if (!(caster instanceof CindermawEntity owner)) {
             return;
         }
         // 按类型结算伤害
         switch (kind()) {
-            case FISSURE -> tickFissure(owner, age);
             case GEYSERS -> tickGeysers(owner, age);
             case POOL -> tickPool(owner, age);
             case NOVA -> tickNova(owner, age);
@@ -242,7 +256,7 @@ public final class MagmaEffect extends Projectile {
     }
 
     // 裂缝：每段在喷发刻对附近目标结算一次
-    private void tickFissure(CindermawEntity owner, int age) {
+    private void tickFissure(LivingEntity owner, int age) {
         CompoundTag d = data();
         int lines = d.getInt("Lines");
         int segments = d.getInt("Segments");
@@ -256,7 +270,7 @@ public final class MagmaEffect extends Projectile {
                     continue;
                 }
                 Vec3 point = position().add(fissurePoint(line, k)).add(0, dy, 0);
-                strike(owner, point, 1.0, 2.6, owner.attackDamage() * 0.55F, 4, 0.75);
+                strike(owner, point, 1.0, 2.6, d.getFloat("Damage"), 4, 0.75);
                 if (k % 3 == 0) {
                     level().playSound(null, point.x, point.y, point.z, SoundEvents.LAVA_POP, SoundSource.HOSTILE, 1.4F, 0.6F);
                 }
@@ -325,10 +339,21 @@ public final class MagmaEffect extends Projectile {
     }
 
     // 单点结算：水平半径与高度范围内，同一效果内每个目标只命中一次
-    private void strike(CindermawEntity owner, Vec3 point, double radius, double height, float damage, int fire, double lift) {
+    // 判断施放者能否伤害目标：Boss 走自身规则，玩家不伤自己、队友和自己的宠物
+    private static boolean harms(LivingEntity owner, LivingEntity victim) {
+        if (owner instanceof CindermawEntity boss) {
+            return boss.canHarm(victim);
+        }
+        if (victim == owner || !victim.isAlive() || owner.isAlliedTo(victim)) {
+            return false;
+        }
+        return !(victim instanceof TamableAnimal pet && pet.isOwnedBy(owner));
+    }
+
+    private void strike(LivingEntity owner, Vec3 point, double radius, double height, float damage, int fire, double lift) {
         for (LivingEntity victim : level().getEntitiesOfClass(LivingEntity.class, new AABB(point, point).inflate(radius + 0.5, height, radius + 0.5))) {
             Vec3 offset = victim.position().subtract(point);
-            if (struck.contains(victim.getId()) || !owner.canHarm(victim)) {
+            if (struck.contains(victim.getId()) || !harms(owner, victim)) {
                 continue;
             }
             if (offset.horizontalDistance() > radius + victim.getBbWidth() * 0.5 || offset.y < -0.6 || offset.y > height) {

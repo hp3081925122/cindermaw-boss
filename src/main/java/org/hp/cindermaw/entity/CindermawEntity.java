@@ -79,13 +79,15 @@ public final class CindermawEntity extends Monster implements GeoEntity {
     private int attackGap = 40;
     private CindermawAttack lastAttack = CindermawAttack.NONE;
     private boolean leapAirborne;
+    // 召唤出场倒计时：等客户端收到实体后再触发动画
+    private int entranceDelay;
     private Vec3 leapHorizontal = Vec3.ZERO;
     private Vec3 targetLastPos;
     private Vec3 targetVelocity = Vec3.ZERO;
 
     public CindermawEntity(EntityType<? extends CindermawEntity> type, Level level) {
         super(type, level);
-        xpReward = 60;
+        xpReward = 300;
         setMaxUpStep(1.5F);
     }
 
@@ -222,6 +224,18 @@ public final class CindermawEntity extends Monster implements GeoEntity {
             attackGap--;
         }
         trackTarget();
+        // 召唤出场：撑地起身动画，脚下炸开冲击环
+        if (entranceDelay > 0) {
+            entranceDelay--;
+            if (entranceDelay == 0) {
+                startAttack(CindermawAttack.LAND);
+                MagmaEffect.shockwave(this, position(), 7.0F, 0);
+                playSound(SoundEvents.RAVAGER_ROAR, 4.0F, 0.6F);
+                playSound(SoundEvents.GENERIC_EXPLODE, 3.0F, 0.6F);
+                attackGap = 30;
+            }
+            return;
+        }
         CindermawAttack attack = getAttack();
         // 半血进入二阶段：滞空时等落地后再咆哮
         boolean airborne = attack == CindermawAttack.LEAP && leapAirborne;
@@ -414,6 +428,17 @@ public final class CindermawEntity extends Monster implements GeoEntity {
         if (age >= attack.duration) {
             endAttack(attack);
         }
+    }
+
+    // 由召唤物生成时调用，延迟两刻播放出场
+    public void beginEntrance() {
+        entranceDelay = 3;
+    }
+
+    // 头部可偏离身体的最大角度，原版默认 10 度太小，盯人时头几乎不动
+    @Override
+    public int getMaxHeadYRot() {
+        return 50;
     }
 
     // 限速转向目标，处理角度环绕

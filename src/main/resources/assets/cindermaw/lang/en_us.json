@@ -2,5 +2,13 @@
   "entity.cindermaw.cindermaw": "Cindermaw",
   "item.cindermaw.cindermaw_spawn_egg": "Cindermaw Spawn Egg",
   "entity.cindermaw.lava_bomb": "Lava Bomb",
-  "entity.cindermaw.magma_effect": "Magma Tremor"
+  "entity.cindermaw.magma_effect": "Magma Tremor",
+  "item.cindermaw.cindermaw_core": "Cindermaw Core",
+  "item.cindermaw.cindermaw_core.desc": "Use on the ground to awaken the Cindermaw",
+  "item.cindermaw.cindermaw_core.no_space": "Not enough room for the Cindermaw to awaken",
+  "item.cindermaw.cindermaw_heart": "Cindermaw Heart",
+  "item.cindermaw.cindermaw_hammer": "Cindermaw Hammer",
+  "item.cindermaw.cindermaw_hammer.desc": "Hold right-click to charge, release to split the ground with lava",
+  "item.cindermaw.cindermaw_chestplate": "Furnace Heart Chestplate",
+  "itemGroup.cindermaw": "Cindermaw"
 }

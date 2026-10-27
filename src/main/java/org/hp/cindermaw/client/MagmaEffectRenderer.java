@@ -3,6 +3,7 @@ package org.hp.cindermaw.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
@@ -10,6 +11,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.hp.cindermaw.entity.MagmaEffect;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
 
 // 地面特效网格：冲击环、熔岩裂缝、喷泉火柱、熔岩池与新星火墙。
 public final class MagmaEffectRenderer extends EntityRenderer<MagmaEffect> {
@@ -141,13 +144,87 @@ public final class MagmaEffectRenderer extends EntityRenderer<MagmaEffect> {
         }
     }
 
-    // 熔岩池：底层熔岩片，上层辉光脉动
+    // 熔岩池：不规则多边形，先是流动熔浆，再冷却成黑壳与发光裂缝，外圈留焦痕
     private void pool(MagmaEffect effect, float radius, float age, float time, PoseStack pose, MultiBufferSource buffers) {
-        float grow = Math.min(1.0F, age / 4.0F);
+        float grow = 1.0F - (1.0F - Math.min(1.0F, age / 5.0F)) * (1.0F - Math.min(1.0F, age / 5.0F));
         float fade = Math.min(1.0F, (effect.life() - age) / 18.0F);
-        VfxDraw.flat(buffers, VfxDraw.SOFT, pose, new Vec3(0, 0.03, 0), radius * grow, VfxDraw.POOL, 0xFFFFFF, fade);
-        float pulse = 0.45F + Mth.sin(time * 0.25F) * 0.15F;
-        VfxDraw.flat(buffers, VfxDraw.GLOW, pose, new Vec3(0, 0.05, 0), radius * grow * 1.1, VfxDraw.DISC, 0xFF7A30, pulse * fade);
+        float cool = Math.max(0.0F, Math.min(1.0F, (age - 18.0F) / 35.0F));
+        int seed = effect.getId();
+        // 每个池子错开一点高度，重叠时不闪烁
+        double lift = 0.03 + (seed % 7) * 0.004;
+        // 不规则边缘：随机半径再与相邻点平滑
+        int n = 22;
+        float[] raw = new float[n];
+        for (int i = 0; i < n; i++) {
+            float h = Mth.sin(seed * 12.9898F + i * 78.233F) * 43758.547F;
+            raw[i] = 0.72F + (h - Mth.floor(h)) * 0.45F;
+        }
+        float[] edge = new float[n];
+        for (int i = 0; i < n; i++) {
+            edge[i] = (raw[(i + n - 1) % n] + raw[i] * 2 + raw[(i + 1) % n]) / 4.0F;
+        }
+        float r = radius * grow;
+        Matrix4f m = pose.last().pose();
+        Matrix3f nm = pose.last().normal();
+        // 世界坐标平铺，避免每个池子贴图一样
+        double ox = effect.getX() * 0.4;
+        double oz = effect.getZ() * 0.4;
+        float flow = time * 0.004F;
+        int moltenRgb = VfxDraw.mix(0xFFFFFF, 0x6A1608, cool);
+        float moltenAlpha = (1.0F - cool * 0.9F) * fade;
+        float crackAlpha = cool * fade * (0.75F + Mth.sin(time * 0.15F + seed) * 0.25F);
+        VertexConsumer scorch = buffers.getBuffer(VfxDraw.SOFT);
+        VertexConsumer molten = buffers.getBuffer(VfxDraw.MOLTEN);
+        VertexConsumer crust = buffers.getBuffer(VfxDraw.CRUST);
+        float[] sr = VfxDraw.SCORCH;
+        Vec3 c = new Vec3(0, lift, 0);
+        for (int i = 0; i < n; i++) {
+            int j = (i + 1) % n;
+            double a0 = i * Math.PI * 2 / n;
+            double a1 = j * Math.PI * 2 / n;
+            Vec3 p0 = new Vec3(Math.cos(a0) * r * edge[i], lift, Math.sin(a0) * r * edge[i]);
+            Vec3 p1 = new Vec3(Math.cos(a1) * r * edge[j], lift, Math.sin(a1) * r * edge[j]);
+            // 焦痕：比熔岩大一圈，冷却后更明显
+            Vec3 s0 = new Vec3(p0.x * 1.35, lift - 0.008, p0.z * 1.35);
+            Vec3 s1 = new Vec3(p1.x * 1.35, lift - 0.008, p1.z * 1.35);
+            double span = r * 1.35 * 1.2;
+            float su0 = (float) (sr[0] + (sr[2] - sr[0]) * (0.5 + s0.x / span / 2));
+            float sv0 = (float) (sr[1] + (sr[3] - sr[1]) * (0.5 + s0.z / span / 2));
+            float su1 = (float) (sr[0] + (sr[2] - sr[0]) * (0.5 + s1.x / span / 2));
+            float sv1 = (float) (sr[1] + (sr[3] - sr[1]) * (0.5 + s1.z / span / 2));
+            float scu = (sr[0] + sr[2]) / 2;
+            float scv = (sr[1] + sr[3]) / 2;
+            float scorchAlpha = (0.55F + cool * 0.35F) * fade * grow;
+            scorchVertex(scorch, m, nm, c.add(0, -0.008, 0), scu, scv, scorchAlpha);
+            scorchVertex(scorch, m, nm, s1, su1, sv1, scorchAlpha);
+            scorchVertex(scorch, m, nm, s0, su0, sv0, scorchAlpha);
+            scorchVertex(scorch, m, nm, c.add(0, -0.008, 0), scu, scv, scorchAlpha);
+            // 熔浆层：中心亮、边缘暗，贴图缓慢流动
+            float cu = (float) ox + flow;
+            float cv = (float) oz;
+            VfxDraw.vertex(molten, m, nm, c, cu, cv, moltenRgb, moltenAlpha);
+            VfxDraw.vertex(molten, m, nm, p1, (float) (ox + p1.x * 0.4) + flow, (float) (oz + p1.z * 0.4), moltenRgb, moltenAlpha * 0.55F);
+            VfxDraw.vertex(molten, m, nm, p0, (float) (ox + p0.x * 0.4) + flow, (float) (oz + p0.z * 0.4), moltenRgb, moltenAlpha * 0.55F);
+            VfxDraw.vertex(molten, m, nm, c, cu, cv, moltenRgb, moltenAlpha);
+            // 冷却裂缝层：黑壳之间透出暗橙光
+            if (crackAlpha > 0.01F) {
+                Vec3 q0 = p0.add(0, 0.004, 0);
+                Vec3 q1 = p1.add(0, 0.004, 0);
+                Vec3 qc = c.add(0, 0.004, 0);
+                VfxDraw.vertex(crust, m, nm, qc, (float) ox, (float) oz, 0xFF9A50, crackAlpha);
+                VfxDraw.vertex(crust, m, nm, q1, (float) (ox + q1.x * 0.4), (float) (oz + q1.z * 0.4), 0xFF9A50, crackAlpha * 0.4F);
+                VfxDraw.vertex(crust, m, nm, q0, (float) (ox + q0.x * 0.4), (float) (oz + q0.z * 0.4), 0xFF9A50, crackAlpha * 0.4F);
+                VfxDraw.vertex(crust, m, nm, qc, (float) ox, (float) oz, 0xFF9A50, crackAlpha);
+            }
+        }
+    }
+
+    // 焦痕顶点：半透明层需要真实透明度，不预乘颜色
+    private static void scorchVertex(VertexConsumer out, Matrix4f m, Matrix3f n, Vec3 p, float u, float v, float alpha) {
+        out.vertex(m, (float) p.x, (float) p.y, (float) p.z)
+                .color(26, 16, 12, (int) (255 * Math.max(0, Math.min(1, alpha))))
+                .uv(u, v).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(0xF000F0)
+                .normal(n, 0, 1, 0).endVertex();
     }
 
     // 新星：火墙圆环向外推进，地面留下发光带

@@ -147,7 +147,8 @@ public final class LavaBomb extends Projectile {
                 CindermawEntity.shove(victim, victim.position().subtract(contact), 0.5, 0.3);
             }
         }
-        MagmaEffect.pool(owner, contact, 1.6F);
+        // 熔岩池贴到地面，命中半空目标时也落在脚下
+        MagmaEffect.pool(owner, owner.groundAt(contact), 1.6F);
     }
 
     // 熔岩弹不持久化
