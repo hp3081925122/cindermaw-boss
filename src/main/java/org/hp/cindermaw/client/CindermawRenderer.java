@@ -78,16 +78,24 @@ public final class CindermawRenderer extends GeoEntityRenderer<CindermawEntity, 
         super.postRenderPass(pass, collector);
         CindermawRenderState state = pass.renderState();
         CindermawEntity entity = state.entity;
-        if (entity == null || state.dying) {
+        if (entity == null) {
             return;
         }
         Vec3 origin = new Vec3(state.x, state.y, state.z);
         PoseStack pose = pass.poseStack();
-        sweepTrail(entity, state.attack, state.attackAge, origin, pose, collector);
+        if (state.dying) {
+            if (entity.deathTime >= 56 && entity.deathTime < 66) {
+                float dt = (entity.deathTime - 56 + state.partial) / 10.0F;
+                VfxDraw.dome(collector, pose, new Vec3(0, 0.8, 0), 1.2 + dt * 5.2, -dt * 1.5F, 0xFFF2B0, 0xA82008, (1.0F - dt) * 0.9F);
+            }
+            return;
+        }
+        sweepTrail(entity, state.attack, state.attackAge, origin, state.time, pose, collector);
         if (state.attack == CindermawAttack.BREATH) {
             breathCone(entity, state.attackAge, origin, state.partial, state.time, pose, collector);
         }
         ventJets(entity, state.attack, state.attackAge, origin, state.time, pose, collector);
+        burstShells(entity, state.attack, state.attackAge, origin, state.time, pose, collector);
     }
 
     private void captureBone(CindermawRenderState state, RenderPassInfo<CindermawRenderState> info, GeoBone bone, int index, SubmitNodeCollector tasks) {
@@ -113,7 +121,7 @@ public final class CindermawRenderer extends GeoEntityRenderer<CindermawEntity, 
         });
     }
 
-    private void sweepTrail(CindermawEntity entity, CindermawAttack attack, float age, Vec3 origin, PoseStack pose, SubmitNodeCollector collector) {
+    private void sweepTrail(CindermawEntity entity, CindermawAttack attack, float age, Vec3 origin, float time, PoseStack pose, SubmitNodeCollector collector) {
         int hand = -1;
         if (attack == CindermawAttack.SWEEP && age >= 9 && age < 15) {
             hand = CindermawEntity.BONE_HAND_RIGHT;
@@ -125,26 +133,53 @@ public final class CindermawRenderer extends GeoEntityRenderer<CindermawEntity, 
         }
         entity.clientTrail.removeIf(sample -> attack != CindermawAttack.SWEEP || age - sample[1].x > 5 || age < sample[1].x);
         int count = entity.clientTrail.size();
-        if (count < 2) {
-            return;
+        if (count >= 2) {
+            VfxDraw.submit(collector, pose, VfxDraw.GLOW, (local, out) -> {
+                float[] r = VfxDraw.TRAIL;
+                for (int i = 0; i < count - 1; i++) {
+                    Vec3[] a = entity.clientTrail.get(i);
+                    Vec3[] b = entity.clientTrail.get(i + 1);
+                    float fadeA = 1.0F - (float) (age - a[1].x) / 5.0F;
+                    float fadeB = 1.0F - (float) (age - b[1].x) / 5.0F;
+                    double hA = 1.05 * fadeA;
+                    double hB = 1.05 * fadeB;
+                    Vec3 pa = a[0].subtract(origin);
+                    Vec3 pb = b[0].subtract(origin);
+                    Vec3 radA = new Vec3(pa.x, 0, pa.z);
+                    Vec3 radB = new Vec3(pb.x, 0, pb.z);
+                    if (radA.lengthSqr() > 1.0E-4) {
+                        radA = radA.normalize().scale(hA * 0.9);
+                    }
+                    if (radB.lengthSqr() > 1.0E-4) {
+                        radB = radB.normalize().scale(hB * 0.9);
+                    }
+                    float u0 = r[0] + (r[2] - r[0]) * (1 - fadeA);
+                    float u1 = r[0] + (r[2] - r[0]) * (1 - fadeB);
+                    VfxDraw.quadGrad2(out, local, pa.add(0, hA, 0), pb.add(0, hB, 0), pb.add(0, -hB, 0), pa.add(0, -hA, 0),
+                            u0, r[1], u1, r[3], 0xFF6A1E, fadeB, 0xFF6A1E, fadeA);
+                    VfxDraw.quadGrad2(out, local, pa.add(0, hA * 0.42, 0), pb.add(0, hB * 0.42, 0), pb.add(0, -hB * 0.42, 0), pa.add(0, -hA * 0.42, 0),
+                            u0, r[1], u1, r[3], 0xFFF0A8, fadeB, 0xFFF0A8, fadeA);
+                    VfxDraw.quadGrad2(out, local, pa.add(radA), pb.add(radB), pb.subtract(radB.scale(0.45)), pa.subtract(radA.scale(0.45)),
+                            u0, r[1], u1, r[3], 0xFF8828, fadeB * 0.85F, 0xFF8828, fadeA * 0.85F);
+                }
+            });
         }
-        VfxDraw.submit(collector, pose, VfxDraw.GLOW, (local, out) -> {
-            float[] r = VfxDraw.TRAIL;
-            for (int i = 0; i < count - 1; i++) {
-                Vec3[] a = entity.clientTrail.get(i);
-                Vec3[] b = entity.clientTrail.get(i + 1);
-                float fadeA = 1.0F - (float) (age - a[1].x) / 5.0F;
-                float fadeB = 1.0F - (float) (age - b[1].x) / 5.0F;
-                double hA = 1.1 * fadeA;
-                double hB = 1.1 * fadeB;
-                Vec3 pa = a[0].subtract(origin);
-                Vec3 pb = b[0].subtract(origin);
-                float u0 = r[0] + (r[2] - r[0]) * (1 - fadeA);
-                float u1 = r[0] + (r[2] - r[0]) * (1 - fadeB);
-                VfxDraw.quad2(out, local, pa.add(0, hA, 0), pb.add(0, hB, 0), pb.add(0, -hB, 0), pa.add(0, -hA, 0), u0, r[1], u1, r[3], 0xFF6A1E, Math.min(fadeA, fadeB));
-                VfxDraw.quad2(out, local, pa.add(0, hA * 0.45, 0), pb.add(0, hB * 0.45, 0), pb.add(0, -hB * 0.45, 0), pa.add(0, -hA * 0.45, 0), u0, r[1], u1, r[3], 0xFFE08A, Math.min(fadeA, fadeB));
+        if (attack == CindermawAttack.SWEEP) {
+            for (int hitTick : new int[]{11, 24}) {
+                float since = age - hitTick;
+                if (since >= 0 && since < 6) {
+                    int hIdx = hitTick == 11 ? CindermawEntity.BONE_HAND_RIGHT : CindermawEntity.BONE_HAND_LEFT;
+                    Vec3 hitPos = entity.clientBones[hIdx];
+                    if (hitPos != null) {
+                        float t = since / 6.0F;
+                        Vec3 rel = new Vec3(hitPos.x - origin.x, 0.05, hitPos.z - origin.z);
+                        VfxDraw.dome(collector, pose, rel, 0.5 + t * 1.9, -time * 0.35F, 0xFFF0A0, 0xD83810, (1.0F - t) * 0.85F);
+                        VfxDraw.submit(collector, pose, VfxDraw.GLOW, (local, out) ->
+                                VfxDraw.ring(out, local, rel, 0.6 + t * 2.1, Math.max(0.1, 0.2 + t * 1.5), 0.0, VfxDraw.RING, 0xFF8A28, (1.0F - t) * 0.8F));
+                    }
+                }
             }
-        });
+        }
     }
 
     private void breathCone(CindermawEntity entity, float age, Vec3 origin, float partial, float time, PoseStack pose, SubmitNodeCollector collector) {
@@ -162,33 +197,12 @@ public final class CindermawRenderer extends GeoEntityRenderer<CindermawEntity, 
         Vec3 dir = new Vec3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
         Vec3 side = new Vec3(Math.cos(yaw), 0, Math.sin(yaw));
         Vec3 up = dir.cross(side).normalize();
-        Vec3 base = furnace.subtract(origin).add(dir.scale(0.3));
+        Vec3 base = furnace.subtract(origin).add(dir.scale(0.28));
         float reach = 8.5F * Math.min(1.0F, (age - 13) / 5.0F);
+        VfxDraw.coneJet(collector, pose, base, dir, side, up, reach, time, ramp);
         VfxDraw.submit(collector, pose, VfxDraw.GLOW, (local, out) -> {
-            int puffCount = 26;
-            for (int i = 0; i < puffCount; i++) {
-                float flow = time * 0.11F + i * 0.618F;
-                float phase = flow - Mth.floor(flow);
-                int cycle = Mth.floor(flow);
-                float dist = phase * reach;
-                float seed = Mth.sin(i * 12.9898F + cycle * 78.233F) * 43758.547F;
-                seed = seed - Mth.floor(seed);
-                double spreadAngle = seed * Math.PI * 2;
-                double spread = dist * 0.22 * (0.4 + seed * 0.6);
-                Vec3 at = base.add(dir.scale(dist)).add(side.scale(Math.cos(spreadAngle) * spread)).add(up.scale(Math.sin(spreadAngle) * spread * 0.7 + phase * phase * 0.6));
-                double size = 0.3 + phase * 1.5;
-                int rgb;
-                if (phase < 0.35F) {
-                    rgb = VfxDraw.mix(0xFFF0C0, 0xFF8A2A, phase / 0.35F);
-                } else {
-                    rgb = VfxDraw.mix(0xFF8A2A, 0x7A1A08, (phase - 0.35F) / 0.65F);
-                }
-                float fade = Math.min(1.0F, phase * 8.0F) * (1.0F - phase * phase);
-                VfxDraw.billboard(out, local, at, size, seed * 6.28 + time * 0.08 * (i % 2 * 2 - 1), VfxDraw.PUFF[i % 2], rgb, 0.95F * fade * ramp);
-            }
-            float flare = 0.9F + Mth.sin(time * 2.1F) * 0.12F;
-            VfxDraw.billboard(out, local, base, 0.85 * flare, time * 0.05, VfxDraw.DISC, 0xFFD890, ramp);
-            VfxDraw.billboard(out, local, base.add(dir.scale(0.6)), 0.55, -time * 0.07, VfxDraw.PUFF[0], 0xFFF4D0, ramp);
+            float flare = 0.48F + Mth.sin(time * 2.1F) * 0.06F;
+            VfxDraw.billboard(out, local, base, flare, time * 0.12, VfxDraw.DISC, 0xFFF2B8, ramp * 0.9F);
         });
     }
 
@@ -226,32 +240,44 @@ public final class CindermawRenderer extends GeoEntityRenderer<CindermawEntity, 
     }
 
     private void ventJets(CindermawEntity entity, CindermawAttack attack, float age, Vec3 origin, float time, PoseStack pose, SubmitNodeCollector collector) {
-        VfxDraw.submit(collector, pose, VfxDraw.FLAME, (local, out) -> {
-            for (int v = 0; v < 3; v++) {
-                Vec3 vent = entity.clientBones[CindermawEntity.BONE_VENT + v];
-                if (vent == null) {
-                    continue;
-                }
-                double length = 0;
-                if (attack == CindermawAttack.BARRAGE) {
-                    for (int shot = 12; shot <= 36; shot += 12) {
-                        float since = age - shot;
-                        if (since >= -2 && since < 8) {
-                            float pulse = Math.max(0, Math.min(1, (since + 2) / 2.0F)) * Math.max(0, 1 - Math.max(0, since) / 8.0F);
-                            length = Math.max(length, 4.5 * pulse);
-                        }
+        for (int v = 0; v < 3; v++) {
+            Vec3 vent = entity.clientBones[CindermawEntity.BONE_VENT + v];
+            if (vent == null) {
+                continue;
+            }
+            double length = 0;
+            if (attack == CindermawAttack.BARRAGE) {
+                for (int shot = 12; shot <= 36; shot += 12) {
+                    float since = age - shot;
+                    if (since >= -2 && since < 8) {
+                        float pulse = Math.max(0, Math.min(1, (since + 2) / 2.0F)) * Math.max(0, 1 - Math.max(0, since) / 8.0F);
+                        length = Math.max(length, 4.5 * pulse);
                     }
                 }
-                if (attack == CindermawAttack.ROAR && age < 30) {
-                    length = Math.max(length, 2.0 + Mth.sin(time * 1.5F + v) * 0.5);
-                }
-                if (length <= 0.05) {
-                    continue;
-                }
-                Vec3 base = vent.subtract(origin);
-                VfxDraw.column(out, local, base, new Vec3(0, length, 0), 0.32, 0.12, 3, -time * 0.25F, 1.0F, 0xFF7A26, 0.9F);
-                VfxDraw.column(out, local, base, new Vec3(0, length * 0.6, 0), 0.18, 0.06, 3, -time * 0.3F, 1.0F, 0xFFE6A0, 0.9F);
             }
-        });
+            if (attack == CindermawAttack.ROAR && age < 30) {
+                length = Math.max(length, 2.0 + Mth.sin(time * 1.5F + v) * 0.5);
+            }
+            if (length <= 0.05) {
+                continue;
+            }
+            Vec3 base = vent.subtract(origin);
+            VfxDraw.column(collector, pose, base, new Vec3(0, length, 0), 0.30, 0.14, 3, -time * 0.25F, 1.2F, 0xFF7A26, 0.9F);
+            VfxDraw.column(collector, pose, base, new Vec3(0, length * 0.65, 0), 0.16, 0.07, 3, -time * 0.32F, 1.0F, 0xFFF0A8, 0.9F);
+        }
+    }
+
+    private void burstShells(CindermawEntity entity, CindermawAttack attack, float age, Vec3 origin, float time, PoseStack pose, SubmitNodeCollector collector) {
+        Vec3 furnace = entity.clientBones[CindermawEntity.BONE_FURNACE];
+        Vec3 relFurnace = furnace != null ? furnace.subtract(origin) : new Vec3(0, 1.36, 0.0);
+        if (attack == CindermawAttack.NOVA && age >= 22 && age < 30) {
+            float t = (age - 22) / 8.0F;
+            VfxDraw.dome(collector, pose, new Vec3(0, 0.1, 0), 0.9 + t * 3.8, -time * 0.35F, 0xFFF4B8, 0xC82808, (1.0F - t) * 0.85F);
+        } else if (attack == CindermawAttack.ROAR && age >= 26 && age < 35) {
+            float t = (age - 26) / 9.0F;
+            VfxDraw.dome(collector, pose, new Vec3(relFurnace.x, 0.2, relFurnace.z), 1.0 + t * 4.5, -time * 0.4F, 0xFFE898, 0xB82208, (1.0F - t) * 0.85F);
+            VfxDraw.submit(collector, pose, VfxDraw.GLOW, (local, out) ->
+                    VfxDraw.ring(out, local, new Vec3(0, 0.08, 0), 1.2 + t * 5.0, Math.max(0.2, 0.5 + t * 3.8), 0.0, VfxDraw.RING, 0xFF7A24, (1.0F - t) * 0.85F));
+        }
     }
 }

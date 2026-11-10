@@ -53,8 +53,9 @@ public final class LavaBombRenderer extends EntityRenderer<LavaBomb, LavaBombRen
         }
         if (state.impacted) {
             float t = Math.min(1.0F, state.impactAge / LavaBomb.LINGER);
+            VfxDraw.dome(collector, pose, state.landing, 0.65 + 2.1 * t, -state.age * 0.35F, 0xFFF0A8, 0xD83810, (1 - t) * 0.9F);
             VfxDraw.submit(collector, pose, VfxDraw.GLOW, (local, out) ->
-                    VfxDraw.flat(out, local, state.landing, 1.2 + 1.8 * t, VfxDraw.DISC, 0xFFD080, 1 - t));
+                    VfxDraw.ring(out, local, state.landing.add(0, 0.02, 0), 0.7 + 2.2 * t, Math.max(0.15, 0.3 + 1.5 * t), 0.0, VfxDraw.RING, 0xFF8A30, 1 - t));
             return;
         }
         float progress = Math.min(1.0F, state.age / state.flightTicks);
@@ -62,7 +63,7 @@ public final class LavaBombRenderer extends EntityRenderer<LavaBomb, LavaBombRen
         VfxDraw.submit(collector, pose, VfxDraw.GLOW, (local, out) -> {
             VfxDraw.flat(out, local, state.landing, 2.3, VfxDraw.WARN, 0xFF4A1A, 0.5F + 0.5F * progress * blink);
             VfxDraw.flat(out, local, state.landing.add(0, 0.01, 0), 2.3 * (1 - progress) + 0.2, VfxDraw.WARN, 0xFFC070, 0.85F);
-            VfxDraw.flat(out, local, Vec3.ZERO, 0.9, VfxDraw.DISC, 0xFF8A30, 0.6F);
+            VfxDraw.billboard(out, local, Vec3.ZERO, 0.56, state.age * 0.15, VfxDraw.DISC, 0xFF8A30, 0.65F);
         });
         pose.pushPose();
         pose.mulPose(Axis.YP.rotationDegrees(state.age * 17));
