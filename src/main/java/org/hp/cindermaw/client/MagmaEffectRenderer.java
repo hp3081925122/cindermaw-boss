@@ -57,7 +57,7 @@ public final class MagmaEffectRenderer extends EntityRenderer<MagmaEffect> {
         }
     }
 
-    // 冲击环：先快后慢扩张，发光环带加翻起的烟尘墙
+    // 冲击环：先快后慢扩张，发光环带加翻起的烟尘墙与中心 3D 热浪穹顶
     private void shockwave(float radius, int style, float age, PoseStack pose, MultiBufferSource buffers) {
         if (age > 16) {
             return;
@@ -70,10 +70,12 @@ public final class MagmaEffectRenderer extends EntityRenderer<MagmaEffect> {
         if (style == 1) {
             color = 0xFFC060;
         }
-        VfxDraw.ring(buffers, VfxDraw.GLOW, pose, new Vec3(0, 0.08, 0), r, Math.max(0, r - 1.1 * fade - 0.2), 0.0, VfxDraw.RING, color, fade);
-        VfxDraw.ring(buffers, VfxDraw.SOFT, pose, new Vec3(0, 0.05, 0), r * 0.98, r * 0.98 - 0.4, 0.55 * fade, VfxDraw.DUST, 0x3A3236, fade * 0.8F);
-        if (age < 4) {
-            VfxDraw.flat(buffers, VfxDraw.GLOW, pose, new Vec3(0, 0.1, 0), radius * 0.6, VfxDraw.DISC, 0xFFD080, 1 - age / 4.0F);
+        VfxDraw.ring(buffers, VfxDraw.GLOW, pose, new Vec3(0, 0.08, 0), r, Math.max(0, r - 1.2 * fade - 0.2), 0.0, VfxDraw.RING, color, fade);
+        VfxDraw.wall(buffers, pose, new Vec3(0, 0.04, 0), r * 0.96, (0.55 + radius * 0.06) * fade, -age * 0.18F, color, fade * 0.72F);
+        VfxDraw.ring(buffers, VfxDraw.SOFT, pose, new Vec3(0, 0.05, 0), r * 0.98, Math.max(0, r * 0.98 - 0.45), 0.55 * fade, VfxDraw.DUST, 0x3A3236, fade * 0.8F);
+        if (age < 7) {
+            float dt = age / 7.0F;
+            VfxDraw.dome(buffers, pose, new Vec3(0, 0.05, 0), 0.5 + radius * 0.52 * dt, -age * 0.25F, 0xFFF0A8, color, (1.0F - dt) * 0.85F);
         }
     }
 
@@ -137,9 +139,13 @@ public final class MagmaEffectRenderer extends EntityRenderer<MagmaEffect> {
                 float rise = Math.min(1.0F, since / 2.5F);
                 float decay = Math.min(1.0F, (18 - since) / 7.0F);
                 double height = (4.8 + Mth.sin(time * 1.9F + i) * 0.4) * rise * decay;
-                VfxDraw.column(buffers, pose, at, new Vec3(0, height, 0), 0.75, 0.3, 4, -time * 0.32F + i, 1.6F, 0xFF5A1A, 0.95F);
-                VfxDraw.column(buffers, pose, at, new Vec3(0, height * 0.65, 0), 0.4, 0.12, 3, -time * 0.4F + i, 1.2F, 0xFFE6A0, 0.95F);
-                VfxDraw.flat(buffers, VfxDraw.GLOW, pose, at, 1.4, VfxDraw.DISC, 0xFF9A40, decay);
+                VfxDraw.column(buffers, pose, at, new Vec3(0, height, 0), 0.72, 0.28, 3, -time * 0.32F + i, 1.6F, 0xFF5A1A, 0.95F * decay);
+                VfxDraw.column(buffers, pose, at, new Vec3(0, height * 0.68, 0), 0.38, 0.14, 3, -time * 0.42F + i, 1.2F, 0xFFF0A8, 0.95F * decay);
+                if (since < 8) {
+                    float bt = since / 8.0F;
+                    VfxDraw.dome(buffers, pose, at, 0.55 + bt * 1.15, -time * 0.3F + i, 0xFFE898, 0xD83810, (1.0F - bt) * 0.85F);
+                }
+                VfxDraw.ring(buffers, VfxDraw.GLOW, pose, at.add(0, 0.03, 0), 1.25, 0.35, 0.0, VfxDraw.RING, 0xFF8A30, decay * 0.85F);
             }
         }
     }

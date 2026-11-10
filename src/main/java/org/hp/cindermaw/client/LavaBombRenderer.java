@@ -41,9 +41,10 @@ public final class LavaBombRenderer extends EntityRenderer<LavaBomb> {
         Vec3 landing = bomb.landing().subtract(here).add(0, 0.04, 0);
         float age = bomb.age(partial);
         if (bomb.impacted()) {
-            // 命中后数刻的爆闪
+            // 命中后数刻的 3D 热浪穹顶与扩散环
             float t = Math.min(1.0F, bomb.impactAge(partial) / LavaBomb.LINGER);
-            VfxDraw.flat(buffers, VfxDraw.GLOW, pose, landing, 1.2 + 1.8 * t, VfxDraw.DISC, 0xFFD080, 1 - t);
+            VfxDraw.dome(buffers, pose, landing, 0.65 + 2.1 * t, -age * 0.35F, 0xFFF0A8, 0xD83810, (1 - t) * 0.9F);
+            VfxDraw.ring(buffers, VfxDraw.GLOW, pose, landing.add(0, 0.02, 0), 0.7 + 2.2 * t, Math.max(0.15, 0.3 + 1.5 * t), 0.0, VfxDraw.RING, 0xFF8A30, 1 - t);
             return;
         }
         // 落点预警：外圈常亮，内圈随剩余时间收缩
@@ -59,6 +60,6 @@ public final class LavaBombRenderer extends EntityRenderer<LavaBomb> {
         float pulse = 0.36F + Mth.sin(age * 0.9F) * 0.03F;
         VfxDraw.box(buffers, VfxDraw.GLOW, pose, pulse, VfxDraw.CORE, 0xFFA040, 0.85F);
         pose.popPose();
-        VfxDraw.flat(buffers, VfxDraw.GLOW, pose, Vec3.ZERO, 0.9, VfxDraw.DISC, 0xFF8A30, 0.6F);
+        VfxDraw.billboard(buffers.getBuffer(VfxDraw.GLOW), pose, Vec3.ZERO, 0.56, age * 0.15, VfxDraw.DISC, 0xFF8A30, 0.65F);
     }
 }
