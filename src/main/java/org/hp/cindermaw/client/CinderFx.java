@@ -99,15 +99,17 @@ public final class CinderFx {
         }
     }
 
-    // 地面火柱：一束向上的火焰与火星
+    // 地面火柱伴随星火：主火柱由 3D 网格绘制，粒子重点表现飞溅火星与少量火苗点缀
     private static void fountain(Vec3 at, int flames, double power, RandomSource random) {
-        for (int i = 0; i < flames; i++) {
-            spawn(ModParticles.BLAZE_FLAME.get(), at.add(spread(random, 0.35), 0.1, spread(random, 0.35)),
-                    spread(random, 0.06), power * (0.6 + random.nextDouble() * 0.5), spread(random, 0.06));
+        int smallFlames = Math.max(1, flames / 3);
+        for (int i = 0; i < smallFlames; i++) {
+            spawn(ModParticles.BLAZE_FLAME.get(), at.add(spread(random, 0.25), 0.1, spread(random, 0.25)),
+                    spread(random, 0.04), power * (0.45 + random.nextDouble() * 0.35), spread(random, 0.04));
         }
-        for (int i = 0; i < flames / 2 + 1; i++) {
-            spawn(ModParticles.EMBER.get(), at.add(spread(random, 0.3), 0.2, spread(random, 0.3)),
-                    spread(random, 0.15), power * (0.8 + random.nextDouble() * 0.8), spread(random, 0.15));
+        int embers = flames + 2;
+        for (int i = 0; i < embers; i++) {
+            spawn(ModParticles.EMBER.get(), at.add(spread(random, 0.32), 0.2, spread(random, 0.32)),
+                    spread(random, 0.16), power * (0.75 + random.nextDouble() * 0.85), spread(random, 0.16));
         }
     }
 
@@ -288,7 +290,7 @@ public final class CinderFx {
         }
     }
 
-    // 喷焰：蓄力吸火，喷射时火焰流、火星与热烟
+    // 喷焰：蓄力吸火，喷射时主火锥由 3D 螺旋网格渲染，粒子只做高速火星流与末端升腾热烟
     private static void breathTick(CindermawEntity boss, Vec3 furnace, int age, RandomSource random) {
         if (age >= 4 && age < 14) {
             for (int i = 0; i < 3; i++) {
@@ -303,19 +305,14 @@ public final class CinderFx {
         double pitch = Math.toRadians(-7);
         Vec3 forward = boss.forward();
         Vec3 dir = new Vec3(forward.x * Math.cos(pitch), Math.sin(pitch), forward.z * Math.cos(pitch));
-        Vec3 mouth = furnace.add(dir.scale(0.5));
-        for (int i = 0; i < 7; i++) {
-            double speed = 0.55 + random.nextDouble() * 0.35;
-            Vec3 v = dir.scale(speed).add(spread(random, 0.12), spread(random, 0.08), spread(random, 0.12));
-            spawn(ModParticles.BLAZE_FLAME.get(), mouth, v.x, v.y, v.z);
-        }
-        for (int i = 0; i < 4; i++) {
-            Vec3 v = dir.scale(0.7 + random.nextDouble() * 0.5).add(spread(random, 0.2), spread(random, 0.15), spread(random, 0.2));
+        Vec3 mouth = furnace.add(dir.scale(0.45));
+        for (int i = 0; i < 6; i++) {
+            Vec3 v = dir.scale(0.75 + random.nextDouble() * 0.55).add(spread(random, 0.22), spread(random, 0.14), spread(random, 0.22));
             spawn(ModParticles.EMBER.get(), mouth, v.x, v.y, v.z);
         }
-        if (random.nextFloat() < 0.5F) {
-            Vec3 far = mouth.add(dir.scale(5 + random.nextDouble() * 3));
-            spawn(ModParticles.CINDER_SMOKE.get(), far, dir.x * 0.1, 0.06, dir.z * 0.1);
+        if (random.nextFloat() < 0.45F) {
+            Vec3 far = mouth.add(dir.scale(4.5 + random.nextDouble() * 3.5)).add(spread(random, 0.8), 0, spread(random, 0.8));
+            spawn(ModParticles.CINDER_SMOKE.get(), far, dir.x * 0.06, 0.06, dir.z * 0.06);
         }
         if (age % 4 == 0) {
             shake(boss.position(), 0.15F, 12);

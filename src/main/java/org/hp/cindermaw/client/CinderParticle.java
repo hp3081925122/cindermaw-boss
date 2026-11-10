@@ -29,28 +29,28 @@ public final class CinderParticle extends TextureSheetParticle {
         switch (style) {
             case EMBER -> {
                 lifetime = 14 + random.nextInt(18);
-                baseSize = 0.05F + random.nextFloat() * 0.06F;
+                baseSize = 0.045F + random.nextFloat() * 0.045F;
                 gravity = -0.02F + random.nextFloat() * 0.06F;
                 friction = 0.93F;
                 pickSprite(sprites);
             }
             case SMOKE -> {
-                lifetime = 28 + random.nextInt(24);
-                baseSize = 0.35F + random.nextFloat() * 0.35F;
+                lifetime = 24 + random.nextInt(18);
+                baseSize = 0.16F + random.nextFloat() * 0.12F;
                 gravity = -0.012F;
                 friction = 0.9F;
                 setSpriteFromAge(sprites);
             }
             case FLAME -> {
-                lifetime = 9 + random.nextInt(8);
-                baseSize = 0.28F + random.nextFloat() * 0.3F;
-                gravity = -0.01F;
+                lifetime = 8 + random.nextInt(6);
+                baseSize = 0.11F + random.nextFloat() * 0.07F;
+                gravity = -0.015F;
                 friction = 0.9F;
                 setSpriteFromAge(sprites);
             }
             case CHUNK -> {
                 lifetime = 30 + random.nextInt(25);
-                baseSize = 0.08F + random.nextFloat() * 0.09F;
+                baseSize = 0.07F + random.nextFloat() * 0.06F;
                 gravity = 1.0F;
                 friction = 0.98F;
                 hasPhysics = true;
@@ -58,7 +58,7 @@ public final class CinderParticle extends TextureSheetParticle {
             }
             default -> {
                 lifetime = 5 + random.nextInt(3);
-                baseSize = (float) Math.max(0.5, vx);
+                baseSize = Math.min(0.55F, Math.max(0.28F, (float) vx * 0.14F));
                 xd = 0;
                 yd = 0;
                 zd = 0;
@@ -70,9 +70,9 @@ public final class CinderParticle extends TextureSheetParticle {
         quadSize = baseSize;
         // 烟团用暗灰，其余保留贴图原色
         if (style == Style.SMOKE) {
-            float grey = 0.16F + random.nextFloat() * 0.08F;
+            float grey = 0.18F + random.nextFloat() * 0.08F;
             setColor(grey, grey * 0.92F, grey * 0.9F);
-            alpha = 0.8F;
+            alpha = 0.72F;
         }
     }
 
@@ -94,13 +94,13 @@ public final class CinderParticle extends TextureSheetParticle {
             }
             case SMOKE -> {
                 setSpriteFromAge(sprites);
-                alpha = 0.8F * (1.0F - t);
-                quadSize = baseSize * (1.0F + t * 1.6F);
+                alpha = 0.72F * (1.0F - t);
+                quadSize = baseSize * (1.0F + t * 0.65F);
             }
             case FLAME -> {
                 setSpriteFromAge(sprites);
                 alpha = Math.min(1.0F, (1.0F - t) * 2.5F);
-                quadSize = baseSize * (1.0F + Mth.sin(t * Mth.PI) * 0.6F);
+                quadSize = baseSize * (1.0F + Mth.sin(t * Mth.PI) * 0.22F);
             }
             case CHUNK -> {
                 alpha = Math.min(1.0F, (1.0F - t) * 4.0F);
@@ -108,7 +108,7 @@ public final class CinderParticle extends TextureSheetParticle {
             default -> {
                 setSpriteFromAge(sprites);
                 alpha = 1.0F - t;
-                quadSize = baseSize * (1.0F + t * 0.4F);
+                quadSize = baseSize * (1.0F - t * 0.35F);
             }
         }
     }

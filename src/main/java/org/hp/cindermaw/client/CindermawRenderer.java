@@ -28,7 +28,7 @@ public final class CindermawRenderer extends GeoEntityRenderer<CindermawEntity> 
     private final Matrix4f[] firePose = {new Matrix4f(), new Matrix4f(), new Matrix4f()};
     private final Matrix3f[] fireNormal = {new Matrix3f(), new Matrix3f(), new Matrix3f()};
     private final Vec3[] firePivot = new Vec3[3];
-    private static final String[] BONES ={"hand_right", "hand_left", "furnace", "vent_0_flame", "vent_1_flame", "vent_2_flame", "head", "body"};
+    private static final String[] BONES = {"hand_right", "hand_left", "furnace", "vent_0_flame", "vent_1_flame", "vent_2_flame", "head", "body"};
 
     public CindermawRenderer(EntityRendererProvider.Context context) {
         super(context, new CindermawModel());
@@ -65,20 +65,25 @@ public final class CindermawRenderer extends GeoEntityRenderer<CindermawEntity> 
             }
         }
         if (entity.isDeadOrDying()) {
+            if (entity.deathTime >= 56 && entity.deathTime < 66) {
+                float dt = (entity.deathTime - 56 + partial) / 10.0F;
+                VfxDraw.dome(buffers, pose, new Vec3(0, 0.8, 0), 1.2 + dt * 5.2, -dt * 1.5F, 0xFFF2B0, 0xA82008, (1.0F - dt) * 0.9F);
+            }
             return;
         }
         CindermawAttack attack = entity.getAttack();
         float age = entity.attackAge(partial);
         float time = entity.tickCount + partial;
-        sweepTrail(entity, attack, age, origin, pose, buffers);
+        sweepTrail(entity, attack, age, origin, time, pose, buffers);
         if (attack == CindermawAttack.BREATH) {
             breathCone(entity, age, origin, partial, time, pose, buffers);
         }
         ventJets(entity, attack, age, origin, time, pose, buffers);
+        burstShells(entity, attack, age, origin, time, pose, buffers);
     }
 
-    // 横扫弧光：记录挥击拳头的轨迹，画成渐隐的发光带
-    private void sweepTrail(CindermawEntity entity, CindermawAttack attack, float age, Vec3 origin, PoseStack pose, MultiBufferSource buffers) {
+    // 立体十字刀光弧带 + 拳击落点 3D 冲击波穹顶
+    private void sweepTrail(CindermawEntity entity, CindermawAttack attack, float age, Vec3 origin, float time, PoseStack pose, MultiBufferSource buffers) {
         int hand = -1;
         if (attack == CindermawAttack.SWEEP && age >= 9 && age < 15) {
             hand = CindermawEntity.BONE_HAND_RIGHT;
@@ -91,29 +96,56 @@ public final class CindermawRenderer extends GeoEntityRenderer<CindermawEntity> 
         // 只保留最近五刻的采样
         entity.clientTrail.removeIf(sample -> attack != CindermawAttack.SWEEP || age - sample[1].x > 5 || age < sample[1].x);
         int count = entity.clientTrail.size();
-        if (count < 2) {
-            return;
+        if (count >= 2) {
+            VertexConsumer out = buffers.getBuffer(VfxDraw.GLOW);
+            float[] r = VfxDraw.TRAIL;
+            for (int i = 0; i < count - 1; i++) {
+                Vec3[] a = entity.clientTrail.get(i);
+                Vec3[] b = entity.clientTrail.get(i + 1);
+                float fadeA = 1.0F - (float) (age - a[1].x) / 5.0F;
+                float fadeB = 1.0F - (float) (age - b[1].x) / 5.0F;
+                double hA = 1.05 * fadeA;
+                double hB = 1.05 * fadeB;
+                Vec3 pa = a[0].subtract(origin);
+                Vec3 pb = b[0].subtract(origin);
+                Vec3 radA = new Vec3(pa.x, 0, pa.z);
+                Vec3 radB = new Vec3(pb.x, 0, pb.z);
+                if (radA.lengthSqr() > 1.0E-4) {
+                    radA = radA.normalize().scale(hA * 0.9);
+                }
+                if (radB.lengthSqr() > 1.0E-4) {
+                    radB = radB.normalize().scale(hB * 0.9);
+                }
+                float u0 = r[0] + (r[2] - r[0]) * (1 - fadeA);
+                float u1 = r[0] + (r[2] - r[0]) * (1 - fadeB);
+                // 竖直弧面 + 水平径向刀浪面交叉，任何视角都有饱满的立体挥击感
+                VfxDraw.quadGrad2(out, pose, pa.add(0, hA, 0), pb.add(0, hB, 0), pb.add(0, -hB, 0), pa.add(0, -hA, 0),
+                        u0, r[1], u1, r[3], 0xFF6A1E, fadeB, 0xFF6A1E, fadeA);
+                VfxDraw.quadGrad2(out, pose, pa.add(0, hA * 0.42, 0), pb.add(0, hB * 0.42, 0), pb.add(0, -hB * 0.42, 0), pa.add(0, -hA * 0.42, 0),
+                        u0, r[1], u1, r[3], 0xFFF0A8, fadeB, 0xFFF0A8, fadeA);
+                VfxDraw.quadGrad2(out, pose, pa.add(radA), pb.add(radB), pb.subtract(radB.scale(0.45)), pa.subtract(radA.scale(0.45)),
+                        u0, r[1], u1, r[3], 0xFF8828, fadeB * 0.85F, 0xFF8828, fadeA * 0.85F);
+            }
         }
-        VertexConsumer out = buffers.getBuffer(VfxDraw.GLOW);
-        float[] r = VfxDraw.TRAIL;
-        for (int i = 0; i < count - 1; i++) {
-            Vec3[] a = entity.clientTrail.get(i);
-            Vec3[] b = entity.clientTrail.get(i + 1);
-            float fadeA = 1.0F - (float) (age - a[1].x) / 5.0F;
-            float fadeB = 1.0F - (float) (age - b[1].x) / 5.0F;
-            double hA = 1.1 * fadeA;
-            double hB = 1.1 * fadeB;
-            Vec3 pa = a[0].subtract(origin);
-            Vec3 pb = b[0].subtract(origin);
-            float u0 = r[0] + (r[2] - r[0]) * (1 - fadeA);
-            float u1 = r[0] + (r[2] - r[0]) * (1 - fadeB);
-            // 外层橙红宽带 + 内层亮黄窄带
-            VfxDraw.quad2(out, pose, pa.add(0, hA, 0), pb.add(0, hB, 0), pb.add(0, -hB, 0), pa.add(0, -hA, 0), u0, r[1], u1, r[3], 0xFF6A1E, Math.min(fadeA, fadeB));
-            VfxDraw.quad2(out, pose, pa.add(0, hA * 0.45, 0), pb.add(0, hB * 0.45, 0), pb.add(0, -hB * 0.45, 0), pa.add(0, -hA * 0.45, 0), u0, r[1], u1, r[3], 0xFFE08A, Math.min(fadeA, fadeB));
+        // 挥拳命中瞬间：3D 膨胀热浪半球替代放大的 2D 闪光粒子
+        if (attack == CindermawAttack.SWEEP) {
+            for (int hitTick : new int[]{11, 24}) {
+                float since = age - hitTick;
+                if (since >= 0 && since < 6) {
+                    int hIdx = hitTick == 11 ? CindermawEntity.BONE_HAND_RIGHT : CindermawEntity.BONE_HAND_LEFT;
+                    Vec3 hitPos = entity.clientBones[hIdx];
+                    if (hitPos != null) {
+                        float t = since / 6.0F;
+                        Vec3 rel = new Vec3(hitPos.x - origin.x, 0.05, hitPos.z - origin.z);
+                        VfxDraw.dome(buffers, pose, rel, 0.5 + t * 1.9, -time * 0.35F, 0xFFF0A0, 0xD83810, (1.0F - t) * 0.85F);
+                        VfxDraw.ring(buffers, VfxDraw.GLOW, pose, rel, 0.6 + t * 2.1, Math.max(0.1, 0.2 + t * 1.5), 0.0, VfxDraw.RING, 0xFF8A28, (1.0F - t) * 0.8F);
+                    }
+                }
+            }
         }
     }
 
-    // 喷焰：一串朝向镜头的火团沿喷射方向滚动，越远越大、颜色由白黄退到暗红
+    // 喷焰：3D 多层螺旋涡流火锥 + 炉口聚能环（彻底移除放大的 2D 火团纸片）
     private void breathCone(CindermawEntity entity, float age, Vec3 origin, float partial, float time, PoseStack pose, MultiBufferSource buffers) {
         if (age < 13 || age > 53) {
             return;
@@ -129,36 +161,29 @@ public final class CindermawRenderer extends GeoEntityRenderer<CindermawEntity> 
         Vec3 dir = new Vec3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
         Vec3 side = new Vec3(Math.cos(yaw), 0, Math.sin(yaw));
         Vec3 up = dir.cross(side).normalize();
-        Vec3 base = furnace.subtract(origin).add(dir.scale(0.3));
+        Vec3 base = furnace.subtract(origin).add(dir.scale(0.28));
         float reach = 8.5F * Math.min(1.0F, (age - 13) / 5.0F);
+
+        VfxDraw.coneJet(buffers, pose, base, dir, side, up, reach, time, ramp);
+
+        // 炉口小尺寸高亮能量光晕
         VertexConsumer out = buffers.getBuffer(VfxDraw.GLOW);
-        int count = 26;
-        for (int i = 0; i < count; i++) {
-            // 每个火团的循环进度，用黄金比错开避免成排
-            float flow = time * 0.11F + i * 0.618F;
-            float phase = flow - Mth.floor(flow);
-            int cycle = Mth.floor(flow);
-            float dist = phase * reach;
-            // 每轮循环随机一个偏离方向，越远散得越开
-            float seed = Mth.sin(i * 12.9898F + cycle * 78.233F) * 43758.547F;
-            seed = seed - Mth.floor(seed);
-            double spreadAngle = seed * Math.PI * 2;
-            double spread = dist * 0.22 * (0.4 + seed * 0.6);
-            Vec3 at = base.add(dir.scale(dist)).add(side.scale(Math.cos(spreadAngle) * spread)).add(up.scale(Math.sin(spreadAngle) * spread * 0.7 + phase * phase * 0.6));
-            double size = 0.3 + phase * 1.5;
-            int rgb;
-            if (phase < 0.35F) {
-                rgb = VfxDraw.mix(0xFFF0C0, 0xFF8A2A, phase / 0.35F);
-            } else {
-                rgb = VfxDraw.mix(0xFF8A2A, 0x7A1A08, (phase - 0.35F) / 0.65F);
-            }
-            float fade = Math.min(1.0F, phase * 8.0F) * (1.0F - phase * phase);
-            VfxDraw.billboard(out, pose, at, size, seed * 6.28 + time * 0.08 * (i % 2 * 2 - 1), VfxDraw.PUFF[i % 2], rgb, 0.95F * fade * ramp);
+        float flare = 0.48F + Mth.sin(time * 2.1F) * 0.06F;
+        VfxDraw.billboard(out, pose, base, flare, time * 0.12, VfxDraw.DISC, 0xFFF2B8, ramp * 0.9F);
+    }
+
+    // 咆哮与新星聚能爆发时的 3D 膨胀冲击球壳
+    private void burstShells(CindermawEntity entity, CindermawAttack attack, float age, Vec3 origin, float time, PoseStack pose, MultiBufferSource buffers) {
+        Vec3 furnace = entity.clientBones[CindermawEntity.BONE_FURNACE];
+        Vec3 relFurnace = furnace != null ? furnace.subtract(origin) : new Vec3(0, 1.36, 0.0);
+        if (attack == CindermawAttack.NOVA && age >= 22 && age < 30) {
+            float t = (age - 22) / 8.0F;
+            VfxDraw.dome(buffers, pose, new Vec3(0, 0.1, 0), 0.9 + t * 3.8, -time * 0.35F, 0xFFF4B8, 0xC82808, (1.0F - t) * 0.85F);
+        } else if (attack == CindermawAttack.ROAR && age >= 26 && age < 35) {
+            float t = (age - 26) / 9.0F;
+            VfxDraw.dome(buffers, pose, new Vec3(relFurnace.x, 0.2, relFurnace.z), 1.0 + t * 4.5, -time * 0.4F, 0xFFE898, 0xB82208, (1.0F - t) * 0.85F);
+            VfxDraw.ring(buffers, VfxDraw.GLOW, pose, new Vec3(0, 0.08, 0), 1.2 + t * 5.0, Math.max(0.2, 0.5 + t * 3.8), 0.0, VfxDraw.RING, 0xFF7A24, (1.0F - t) * 0.85F);
         }
-        // 炉口亮芯
-        float flare = 0.9F + Mth.sin(time * 2.1F) * 0.12F;
-        VfxDraw.billboard(out, pose, base, 0.85 * flare, time * 0.05, VfxDraw.DISC, 0xFFD890, ramp);
-        VfxDraw.billboard(out, pose, base.add(dir.scale(0.6)), 0.55, -time * 0.07, VfxDraw.PUFF[0], 0xFFF4D0, ramp);
     }
 
     // 记录火焰骨骼的变换矩阵：此时矩阵已移回模型原点，枢轴单独保存
@@ -250,8 +275,8 @@ public final class CindermawRenderer extends GeoEntityRenderer<CindermawEntity> 
                 continue;
             }
             Vec3 base = vent.subtract(origin);
-            VfxDraw.column(buffers, pose, base, new Vec3(0, length, 0), 0.32, 0.12, 3, -time * 0.25F, 1.0F, 0xFF7A26, 0.9F);
-            VfxDraw.column(buffers, pose, base, new Vec3(0, length * 0.6, 0), 0.18, 0.06, 3, -time * 0.3F, 1.0F, 0xFFE6A0, 0.9F);
+            VfxDraw.column(buffers, pose, base, new Vec3(0, length, 0), 0.30, 0.14, 3, -time * 0.25F, 1.2F, 0xFF7A26, 0.9F);
+            VfxDraw.column(buffers, pose, base, new Vec3(0, length * 0.65, 0), 0.16, 0.07, 3, -time * 0.32F, 1.0F, 0xFFF0A8, 0.9F);
         }
     }
 }
